@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Emotion-Based Music System</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            background-image: url('/static/images/background.jpg');
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+            min-height: 100vh;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        .container {
+            background-color: rgba(255, 255, 255, 0.9);
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+            width: 90%;
+            max-width: 800px;
+            text-align: center;
+        }
+        h2 {
+            color: #0056b3;
+            margin-bottom: 20px;
+        }
+        #video-container {
+            width: 640px;
+            height: 480px;
+            background: #000;
+            border-radius: 8px;
+            overflow: hidden;
+            margin: 0 auto 20px;
+        }
+        #video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        #controls-container {
+            margin-top: 20px;
+        }
+        #audioPlayer {
+            width: 100%;
+            margin-top: 20px;
+        }
+        #playlist {
+            margin-top: 30px;
+            text-align: left;
+            background-color: rgba(255, 255, 255, 0.95);
+            padding: 15px;
+            border-radius: 10px;
+        }
+        .song-item {
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+        }
+        .song-item button {
+            margin-right: 10px;
+        }
+        #emotionDisplay {
+            margin-top: 15px;
+            font-size: 18px;
+            font-weight: bold;
+            color: #0056b3;
+        }
+        .logout-button {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background-color: #dc3545;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 5px;
+        }
+        .logout-button:hover {
+            background-color: #c82333;
+        }
+        .history-link {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background-color: #28a745;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 5px;
+        }
+        .history-link:hover {
+            background-color: #218838;
+        }
+        .upload-link {
+    position: absolute;
+    top: 70px;
+    left: 20px;
+    background-color: #17a2b8;
+    color: white;
+    padding: 10px 15px;
+    border: none;
+    border-radius: 5px;
+}
+.upload-link:hover {
+    background-color: #138496;
+}
+
+.admin-link {
+    position: absolute;
+    top: 70px;
+    right: 20px;
+    background-color: #6f42c1;
+    color: white;
+    padding: 10px 15px;
+    border: none;
+    border-radius: 5px;
+}
+.admin-link:hover {
+    background-color: #5a32a3;
+}
+
+    </style>
+</head>
+<body>
+    <button class="logout-button" onclick="location.href='/logout'">Logout</button>
+    <button class="history-link" onclick="location.href='/history'">View Emotion History</button>
+    <button class="upload-link" onclick="location.href='/upload'">Upload Song</button>
+{% if username == 'admin' %}
+<button class="admin-link" onclick="location.href='/admin'">Admin Panel</button>
+{% endif %}
+
+    <div class="container">
+        <h2>Emotion-Based Music System</h2>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    {% for category, message in messages %}
+      <div class="flash-message" style="
+        margin: 10px 0;
+        padding: 10px;
+        border-radius: 5px;
+        color: {% if category == 'success' %}#155724{% elif category == 'danger' %}#721c24{% else %}#0c5460{% endif %};
+        background-color: {% if category == 'success' %}#d4edda{% elif category == 'danger' %}#f8d7da{% else %}#d1ecf1{% endif %};
+        border: 1px solid {% if category == 'success' %}#c3e6cb{% elif category == 'danger' %}#f5c6cb{% else %}#bee5eb{% endif %};
+      ">
+        {{ message }}
+      </div>
+    {% endfor %}
+  {% endif %}
+{% endwith %}
+
+        <div id="video-container">
+            <video id="video" autoplay playsinline muted style="width:640px; height:480px; background:#000;"></video>
+
+            <canvas id="canvas" width="640" height="480" style="display:none;"></canvas>
+        </div>
+        <div id="emotionDisplay">Detected Emotion: <span id="currentEmotion">None</span></div>
+        <div id="controls-container">
+            <button onclick="playCurrentSong()">Play</button>
+            <button onclick="pauseSong()">Pause</button>
+            <button onclick="resumeSong()">Resume</button>
+            <button onclick="playNextSong()">Next Song</button>
+            <button onclick="unlockEmotion()" style="margin-top: 10px; background-color: orange;">Detect New Emotion</button>
+
+        </div>
+        <audio id="audioPlayer" controls></audio>
+        <div id="playlist">
+            <h3>Recommended Songs:</h3>
+            <p>Webcam loading and emotion detection will start automatically.</p>
+        </div>
+    </div>
+
+    <script>
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const audioPlayer = document.getElementById('audioPlayer');
+    const playlistDiv = document.getElementById("playlist");
+    const currentEmotionSpan = document.getElementById("currentEmotion");
+
+    let currentEmotionText = "None";
+    let currentPlaylist = [];
+    let currentSongIndex = -1;
+    let lastEmotion = null;
+    let speaking = false;
+    let isLocked = false; // 🔒 Prevents repeated emotion detection
+
+    window.onload = () => {
+        navigator.mediaDevices.getUserMedia({ video: true }).then(stream => {
+            video.srcObject = stream;
+            video.addEventListener('loadeddata', () => {
+                setInterval(detectEmotion, 5000);
+                detectEmotion();
+            }, { once: true });
+        }).catch(err => alert("Webcam error: " + err));
+    };
+
+    function speak(text, callback) {
+        if (!('speechSynthesis' in window)) {
+            callback();
+            return;
+        }
+        if (speaking) window.speechSynthesis.cancel();
+        speaking = true;
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'en-US';
+        utterance.onend = () => {
+            speaking = false;
+            if (callback) callback();
+        };
+        window.speechSynthesis.speak(utterance);
+    }
+
+    function detectEmotion() {
+        if (isLocked || video.readyState < video.HAVE_CURRENT_DATA) return;
+
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const dataURL = canvas.toDataURL('image/jpeg');
+
+        fetch('/detect', {
+            method: 'POST',
+            body: JSON.stringify({ image: dataURL }),
+            headers: { 'Content-Type': 'application/json' }
+        }).then(res => res.json()).then(data => {
+            const detectedEmotion = data.emotion;
+            if (detectedEmotion === lastEmotion) return;
+
+            lastEmotion = detectedEmotion;
+            currentEmotionText = detectedEmotion;
+            currentEmotionSpan.textContent = detectedEmotion;
+            isLocked = true; // 🔒 Lock emotion detection
+
+            let speech = "";
+            if (detectedEmotion === 'Sad') speech = "You look sad. Let me cheer you up.";
+            else if (detectedEmotion === 'Angry') speech = "You look angry. Relax with some music.";
+            else if (detectedEmotion === 'Happy') speech = "You're happy! Let's enjoy it together.";
+            else if (detectedEmotion === 'Surprise') speech = "You look surprised. Here's some music to match your vibe.";
+            else if (detectedEmotion === 'Fear') speech = "You seem scared. Let this music help you feel safe.";
+            else speech = `Detected emotion: ${detectedEmotion}. Let me find something for you.`;
+
+            fetch(`/songs/${detectedEmotion}`).then(res => res.json()).then(data => {
+                currentPlaylist = data.songs || [];
+                currentSongIndex = -1;
+                playlistDiv.innerHTML = '<h3>Recommended Songs:</h3>';
+
+                currentPlaylist.forEach((song, i) => {
+                    const item = document.createElement('div');
+                    item.className = 'song-item';
+
+                    const btn = document.createElement('button');
+                    btn.textContent = 'Play';
+                    btn.onclick = () => { playSong(song); currentSongIndex = i; };
+                    item.appendChild(btn);
+
+                    const span = document.createElement('span');
+                    span.textContent = song.split('/').pop();
+                    span.className = 'song-title';
+                    item.appendChild(span);
+
+                    playlistDiv.appendChild(item);
+                });
+
+                audioPlayer.pause();
+                audioPlayer.src = '';
+
+                if (currentPlaylist.length > 0) {
+                    speak(speech, () => {
+                        playSong(currentPlaylist[0]);
+                        currentSongIndex = 0;
+                    });
+                } else {
+                    speak(speech);
+                }
+            });
+        }).catch(err => console.error("Error detecting emotion:", err));
+    }
+
+    function unlockEmotion() {
+        isLocked = false;
+        lastEmotion = null;
+        currentEmotionSpan.textContent = "None";
+        playlistDiv.innerHTML = "<h3>Recommended Songs:</h3><p>Webcam loading and emotion detection will start automatically.</p>";
+        currentPlaylist = [];
+        currentSongIndex = -1;
+    }
+
+    function playSong(url) {
+        if (!url) return;
+        audioPlayer.pause();
+        audioPlayer.src = url;
+        audioPlayer.play().catch(() => alert("Autoplay blocked. Click play manually."));
+    }
+
+    function playCurrentSong() {
+        if (currentPlaylist.length === 0) return;
+        if (currentSongIndex < 0) currentSongIndex = 0;
+        playSong(currentPlaylist[currentSongIndex]);
+    }
+
+    function pauseSong() { audioPlayer.pause(); }
+
+    function resumeSong() {
+        audioPlayer.play().catch(() => alert("Autoplay blocked. Click play manually."));
+    }
+
+    function playNextSong() {
+        if (currentPlaylist.length === 0) return;
+        currentSongIndex = (currentSongIndex + 1) % currentPlaylist.length;
+        playSong(currentPlaylist[currentSongIndex]);
+    }
+
+    audioPlayer.addEventListener('ended', playNextSong);
+
+    // Auto-hide flash messages
+    setTimeout(() => {
+        document.querySelectorAll('.flash-message').forEach(el => {
+            el.style.transition = 'opacity 0.5s ease';
+            el.style.opacity = '0';
+            setTimeout(() => el.remove(), 500);
+        });
+    }, 4000);
+</script>
+</body>
+</html>
